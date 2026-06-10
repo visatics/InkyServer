@@ -1,10 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { State } from "../lib/state.js";
 
 export interface RenderRow {
   cache_key: string;
   image_url: string;
   sha1: string;
-  state_out: { screen: number; idx: number };
+  state_out: State;
 }
 
 let client: SupabaseClient | null = null;
