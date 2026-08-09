@@ -1,4 +1,6 @@
-# InkyServer — Phase 0.2 spike (buttons + state engine)
+# InkyServer server — Phase 0.2 spike (buttons + state engine)
+
+> Project overview and phase status: [`../README.md`](../README.md).
 
 Stateless image server for Pimoroni Inky Frame colour e-paper devices. The device makes an
 unauthenticated `GET /:uuid` keyed by a public UUID and receives JSON pointing at a finished,
@@ -29,6 +31,7 @@ Fill in:
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-side only — never ship to a client) |
 | `SUPABASE_STORAGE_BUCKET` | Storage bucket for rendered images (default `renders`) |
+| `SUPABASE_DB_URL` | Postgres URI — **not read by the app**, only by `psql` for migrations. Dashboard → Project Settings → Database → Connection string → URI, **Session pooler** tab (the direct host is IPv6-only). |
 
 ### 2. Supabase: one-time bucket + migration
 
