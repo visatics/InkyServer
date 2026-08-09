@@ -55,8 +55,17 @@ npm run build && npm start
 ```
 
 ```bash
-npm test           # unit tests for the state/advancement logic
+npm test           # unit tests: state/advancement logic + render cache keying
 ```
+
+With the server running, verify the whole device contract against the live backend:
+
+```bash
+npm run test:protocol      # or: BASE_URL=https://... npm run test:protocol
+```
+
+That covers what the unit tests can't — render, upload, cache lookup and the bytes
+actually served. Exits non-zero on failure, `2` if the server or `.env` is missing.
 
 ## Protocol (PRD §7)
 
@@ -151,6 +160,7 @@ src/server.ts            Fastify bootstrap + locally-served /placeholder.jpg
 src/config/device.ts     hard-coded device, screens, assets, and button mappings
 src/routes/device.ts     GET /:uuid handler (transition -> cache/render -> respond)
 src/lib/state.ts         the state engine: parse/initial/applyButton/applyRefresh (pure, unit-tested)
+src/lib/cacheKey.ts      render cache key: device + screen identity + config + resolved state
 src/lib/lastGood.ts      in-memory last-known-good render per screen
 src/render/slideshow.ts  pure render(screen, state) for slideshow screens
 src/render/debug.ts      throwaway debug screen: state + button legend (delete in Phase 0.3)
@@ -158,8 +168,20 @@ src/render/pipeline.ts   sharp resize/encode, sha1, text composer, placeholder
 src/storage/supabase.ts  storage upload + renders cache access
 assets/slideshow-a/      committed sample images (screen 1)
 assets/slideshow-b/      committed sample images (screen 2)
+test/state.test.ts       unit tests for the pure state engine
+test/cacheKey.test.ts    unit tests for render cache keying (screen isolation)
+test/protocol.sh         end-to-end device-contract check against a running server
 migrations/001_renders.sql
 ```
 
-To bust the render cache after changing screens or button mappings, bump `CONFIG_VERSION`
-in `src/config/device.ts` (the debug legend bakes the mappings into the image).
+### Render cache keying
+
+The cache key (`src/lib/cacheKey.ts`) covers the device UUID + resolution, the provider, a
+fingerprint of the **screen** (ordinal, config, asset list), and the resolved render state.
+Screen identity is load-bearing: without it two screens sharing a provider — e.g. the two
+slideshows here — collide and serve each other's images.
+
+Editing a screen's config or assets changes the fingerprint and busts the cache on its own.
+**Button mappings are not in the key**, so after changing `DEVICE_BUTTONS` or
+`SCREEN_BUTTON_OVERRIDES` you must still bump `CONFIG_VERSION` in `src/config/device.ts` —
+the debug screen bakes the mapping legend into the image.

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { CONFIG_VERSION, DEVICE, type Screen } from "../config/device.js";
+import { DEVICE, type Screen } from "../config/device.js";
 import {
   applyButton,
   applyRefresh,
@@ -9,10 +9,11 @@ import {
   renderStateFor,
   type State,
 } from "../lib/state.js";
+import { cacheKeyFor } from "../lib/cacheKey.js";
 import { getLastGood, setLastGood } from "../lib/lastGood.js";
 import { renderSlideshow } from "../render/slideshow.js";
 import { renderDebug } from "../render/debug.js";
-import { renderPlaceholder, sha1Hex, sha256Hex } from "../render/pipeline.js";
+import { renderPlaceholder, sha1Hex } from "../render/pipeline.js";
 import { getCachedRender, insertRender, uploadRender } from "../storage/supabase.js";
 
 interface DeviceParams {
@@ -51,16 +52,7 @@ export async function deviceRoutes(app: FastifyInstance): Promise<void> {
 
       const screen = getScreen(stateOut.screen);
       const renderState = renderStateFor(screen, stateOut);
-      const cacheKey = sha256Hex(
-        [
-          DEVICE.uuid,
-          DEVICE.width,
-          DEVICE.height,
-          screen.provider,
-          CONFIG_VERSION,
-          JSON.stringify(renderState),
-        ].join("|")
-      );
+      const cacheKey = cacheKeyFor(screen, renderState);
 
       try {
         // Treat a cache-read failure as a miss rather than failing the request.
