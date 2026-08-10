@@ -1,4 +1,4 @@
-# InkyServer server — Phase 0.2 spike (buttons + state engine)
+# InkyServer server — Phase 0.3a (DB-driven config + management API)
 
 > Project overview and phase status: [`../README.md`](../README.md).
 
@@ -7,11 +7,12 @@ unauthenticated `GET /:uuid` keyed by a public UUID and receives JSON pointing a
 full-colour baseline JPEG at the device resolution (600×448 for the Inky Frame 5.7"). The
 device downloads the image and dithers on-device.
 
-Phase 0.2 scope: three hard-coded screens (two slideshows + a `debug` test screen), buttons
-A–E with real effect (device-level defaults + per-screen overrides), a pure state engine,
-and in-memory last-known-good fallback. Providers are pure functions of state — all state
-mutation lives in `src/lib/state.ts`. No auth, no DB-backed config, no other providers.
-See `docs/InkyServer-PRD-v1.1.md` §8 and §13.
+Phase 0.3a scope: device, screen, button and asset config now live in **Postgres** rather
+than hard-coded constants, with an auth-scoped management API (`/api`) on top. The device
+contract is unchanged — the same `GET /:uuid`, the same JSON. The state engine is unchanged
+too: it takes config as a parameter instead of importing it, so the same pure functions
+serve DB rows and test fixtures alike. No web UI yet (Phase 0.3b), and still only the
+`slideshow` and `debug` providers. See `docs/InkyServer-PRD-v1.1.md` §5, §6 and §8.
 
 ## Setup
 
@@ -31,21 +32,35 @@ Fill in:
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-side only — never ship to a client) |
 | `SUPABASE_STORAGE_BUCKET` | Storage bucket for rendered images (default `renders`) |
-| `SUPABASE_DB_URL` | Postgres URI — **not read by the app**, only by `psql` for migrations. Dashboard → Project Settings → Database → Connection string → URI, **Session pooler** tab (the direct host is IPv6-only). |
+| `SUPABASE_DB_URL` | Postgres URI for `psql` migrations only. Dashboard → Project Settings → Database → Connection string → URI, **Session pooler** tab (the direct host is IPv6-only). |
+| `DATABASE_URL` | Same URI — this one **is** read by the app for all config queries. |
+| `SUPABASE_JWT_SECRET` | Optional. Set it for projects using legacy HS256 tokens; otherwise tokens are verified against the project's JWKS endpoint. |
 
 ### 2. Supabase: one-time bucket + migration
 
-Create a **public** storage bucket (Dashboard → Storage → New bucket → name `renders`,
-tick "Public bucket"), or via SQL:
+Two buckets with different trust levels — `renders` is **public** (the device downloads
+from it unauthenticated); `uploads` is **private** (user source images, read server-side
+with the service role):
 
 ```sql
-insert into storage.buckets (id, name, public) values ('renders', 'renders', true);
+insert into storage.buckets (id, name, public) values ('renders', 'renders', true)
+  on conflict (id) do nothing;
+insert into storage.buckets (id, name, public) values ('uploads', 'uploads', false)
+  on conflict (id) do nothing;
 ```
 
-Run the migration (Dashboard → SQL Editor, or `psql`):
+Run the migrations in order:
 
 ```bash
 psql "$SUPABASE_DB_URL" -f migrations/001_renders.sql
+psql "$SUPABASE_DB_URL" -f migrations/002_web_app.sql
+```
+
+Then seed the Phase 0.2 fixture device, which is what keeps `test/protocol.sh` meaningful
+as a regression test:
+
+```bash
+node --env-file=.env scripts/seed-fixture.mjs
 ```
 
 ### 3. Run
@@ -101,7 +116,7 @@ exactly one of three transition paths per request:
 Unknown UUIDs get a 404. Render failures return the last good image for that screen
 (in-memory, per-process), else a locally-served placeholder — never a 5xx.
 
-### Screens and buttons (hard-coded, `src/config/device.ts`)
+### Screens and buttons (Postgres; seeded by `scripts/seed-fixture.mjs`)
 
 | Screen | Provider | Notes |
 |---|---|---|
@@ -111,6 +126,34 @@ Unknown UUIDs get a 404. Render failures return the last good image for that scr
 
 Device defaults: A/B/C → goto screens 1/2/3, D → next photo, E → none.
 Screen 3 overrides: D → `set mode=light`, E → `cycle mode` (light → dark → blue).
+
+All of this is now editable through `/api` rather than by editing TypeScript.
+
+## Management API (`/api`)
+
+Every route requires a Supabase JWT (`Authorization: Bearer <token>`) and is scoped to the
+owner. Cross-user access returns **404**, not 403 — a 403 would confirm the resource exists.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/presets` | The three Inky Frame presets |
+| GET/POST | `/api/devices` | List / create (from `presetId` or a custom spec) |
+| GET/PATCH/DELETE | `/api/devices/:id` | Read / update / delete |
+| POST | `/api/devices/:id/regenerate-uuid` | Invalidate the old UUID |
+| GET/POST | `/api/devices/:id/screens` | List / create screens |
+| PATCH/DELETE | `/api/screens/:id` | Update / delete a screen |
+| POST | `/api/devices/:id/screens/reorder` | Rewrite ordinals |
+| GET | `/api/devices/:id/mappings` | Device-level button defaults |
+| PUT/DELETE | `/api/devices/:id/mappings/:button` | Set / clear one button |
+| GET/POST | `/api/screens/:id/assets` | List / upload slideshow images |
+| POST | `/api/screens/:id/assets/reorder` | Rewrite positions |
+| DELETE | `/api/assets/:id` | Delete an asset and its object |
+
+Button mappings store the **exact `ButtonAction` JSON** the engine consumes — the API does
+no translation, so what the matrix editor saves is what the state engine reads.
+
+Uploads are validated, EXIF-stripped and re-encoded server-side (PRD §11); source bytes are
+never stored as received.
 
 ## Manual test script
 

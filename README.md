@@ -29,13 +29,14 @@ Full specification: [`server/docs/InkyServer-PRD-v1.1.md`](server/docs/InkyServe
 
 ## Status
 
-**Phase 0.2 complete and verified end-to-end** against a real Supabase backend.
+**Phase 0.3a complete and verified end-to-end** against a real Supabase backend.
 
 | Phase | Scope | State |
 |---|---|---|
 | **0** | Hello-world spike: device GET contract, slideshow, render cache, byte-stable SHA | ✅ Done |
 | **0.2** | Button + state engine: `goto` / `set` / `cycle` / `slideshow`, per-screen overrides, fallbacks | ✅ Done |
-| **0.3** | Management web app: auth, device/screen CRUD, button-mapping matrix, Preview mode | ⬜ Not started |
+| **0.3a** | Config in Postgres, auth-scoped `/api`, JWT verification, upload hardening | ✅ Done |
+| **0.3b** | Management web app: React SPA, button-mapping matrix, Preview mode | ⬜ Not started |
 | **1** | Providers: `rss`, `calendar`, `remote` — with TTL feed cache and SSRF hardening | ⬜ Not started |
 
 ### What works today
@@ -54,19 +55,17 @@ Full specification: [`server/docs/InkyServer-PRD-v1.1.md`](server/docs/InkyServe
 
 ### Not built yet
 
-No web UI, no authentication, and no database-backed configuration — the device, its three
-screens and their button mappings are hard-coded in `server/src/config/device.ts`. Only the
-`slideshow` provider is real; `rss`, `calendar` and `remote` are Phase 1. The `debug` screen
-is a scaffold to be deleted in Phase 0.3.
+No web UI — the management API exists, but nothing renders it in a browser, and Preview mode
+is the centrepiece of Phase 0.3b. Only the `slideshow` provider is real; `rss`, `calendar`
+and `remote` are Phase 1. The `debug` screen remains as a test fixture.
 
-The schema currently holds only the `renders` cache table. The `users`, `devices`, `screens`,
-`device_button_mappings`, `slideshow_assets` and `feed_cache` tables from PRD §5 arrive with
-Phase 0.3.
+The schema holds `devices`, `screens`, `device_button_mappings`, `slideshow_assets` and the
+`renders` cache. `feed_cache` arrives with Phase 1.
 
 ### Open decisions
 
-- **Frontend framework** for the management app (PRD §6) — blocks Phase 0.3.
-- Whether device/screen config moves into Postgres in one pass with the web app.
+- ~~Frontend framework~~ — settled as React + Vite + TypeScript for Phase 0.3b.
+- ~~Whether device/screen config moves into Postgres~~ — done in Phase 0.3a.
 - 4-button Inky Impression presets (they already work as custom devices).
 
 ## Repository layout
@@ -90,11 +89,13 @@ cd server
 cp .env.example .env          # fill in Supabase URL + service-role key, set a device UUID
 npm install
 psql "$SUPABASE_DB_URL" -f migrations/001_renders.sql
+psql "$SUPABASE_DB_URL" -f migrations/002_web_app.sql
+node --env-file=.env scripts/seed-fixture.mjs
 npm run dev
 ```
 
 ```bash
-npm test                      # 40 unit tests: state engine + render cache keying
+npm test                      # 75 tests: state engine, cache keying, JWT, API, uploads
 npm run test:protocol         # 33 end-to-end checks against the running server
 ```
 
