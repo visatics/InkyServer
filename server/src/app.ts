@@ -9,6 +9,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import { apiRoutes } from "./routes/api/index.js";
 import { deviceRoutes } from "./routes/device.js";
@@ -39,7 +40,11 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
   });
   await app.register(apiRoutes, { prefix: "/api" });
 
-  const spaRoot = path.resolve(opts.spaRoot ?? "web/dist");
+  // Resolved from this module, not the cwd: the SPA lives at the repo root
+  // (../../web/dist from both src/ and the compiled dist/).
+  const spaRoot = path.resolve(
+    opts.spaRoot ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist")
+  );
   const hasSpa = existsSync(path.join(spaRoot, "index.html"));
   if (hasSpa) {
     await app.register(import("@fastify/static"), { root: spaRoot, prefix: "/app/" });
