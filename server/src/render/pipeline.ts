@@ -9,14 +9,20 @@ const JPEG_OPTIONS = {
   mozjpeg: false, // keep encoder output deterministic
 } as const;
 
-/** Resize a source image to the device resolution and encode as baseline JPEG. */
+/**
+ * Resize a source image to the device resolution and encode as baseline JPEG.
+ *
+ * Accepts a path or the raw bytes — sharp treats them identically, and the
+ * encode options must stay exactly as they are: any drift changes every SHA in
+ * the render cache and would force a needless refresh on every panel.
+ */
 export async function renderImage(
-  assetPath: string,
+  source: string | Buffer,
   width: number,
   height: number,
   fit: Fit
 ): Promise<Buffer> {
-  return sharp(assetPath)
+  return sharp(source)
     .resize(width, height, {
       fit,
       position: "centre",

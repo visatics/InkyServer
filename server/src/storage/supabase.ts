@@ -1,12 +1,15 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { State } from "../lib/state.js";
+/**
+ * Supabase Storage access.
+ *
+ * Two buckets with different trust levels:
+ * - `uploads`  (private) — user-supplied source images. Read server-side with
+ *   the service role to render; never exposed to the device or the browser.
+ * - `renders`  (public)  — finished images the device downloads unauthenticated.
+ */
 
-export interface RenderRow {
-  cache_key: string;
-  image_url: string;
-  sha1: string;
-  state_out: State;
-}
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+const UPLOADS = "uploads";
 
 let client: SupabaseClient | null = null;
 
@@ -22,33 +25,37 @@ function getClient(): SupabaseClient {
   return client;
 }
 
-function bucket(): string {
+function rendersBucket(): string {
   return process.env.SUPABASE_STORAGE_BUCKET ?? "renders";
 }
 
-/** Look up a finished render by cache key; null on miss. */
-export async function getCachedRender(cacheKey: string): Promise<RenderRow | null> {
-  const { data, error } = await getClient()
-    .from("renders")
-    .select("cache_key, image_url, sha1, state_out")
-    .eq("cache_key", cacheKey)
-    .maybeSingle();
-  if (error) throw new Error(`renders lookup failed: ${error.message}`);
-  return (data as RenderRow | null) ?? null;
-}
-
-export async function insertRender(row: RenderRow): Promise<void> {
-  const { error } = await getClient().from("renders").upsert(row);
-  if (error) throw new Error(`renders insert failed: ${error.message}`);
-}
-
-/** Upload a JPEG at a deterministic key and return its public URL. */
+/** Upload a finished render at a deterministic key and return its public URL. */
 export async function uploadRender(key: string, jpeg: Buffer): Promise<string> {
-  const storage = getClient().storage.from(bucket());
+  const storage = getClient().storage.from(rendersBucket());
   const { error } = await storage.upload(key, jpeg, {
     upsert: true,
     contentType: "image/jpeg",
   });
   if (error) throw new Error(`storage upload failed: ${error.message}`);
   return storage.getPublicUrl(key).data.publicUrl;
+}
+
+/** Read a user-supplied source image from the private bucket. */
+export async function downloadUpload(key: string): Promise<Buffer> {
+  const { data, error } = await getClient().storage.from(UPLOADS).download(key);
+  if (error) throw new Error(`uploads download failed (${key}): ${error.message}`);
+  return Buffer.from(await data.arrayBuffer());
+}
+
+/** Store a validated, re-encoded source image in the private bucket. */
+export async function uploadSource(key: string, jpeg: Buffer): Promise<void> {
+  const { error } = await getClient()
+    .storage.from(UPLOADS)
+    .upload(key, jpeg, { upsert: true, contentType: "image/jpeg" });
+  if (error) throw new Error(`uploads upload failed: ${error.message}`);
+}
+
+export async function removeSource(key: string): Promise<void> {
+  const { error } = await getClient().storage.from(UPLOADS).remove([key]);
+  if (error) throw new Error(`uploads remove failed: ${error.message}`);
 }
