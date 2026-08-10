@@ -4,7 +4,7 @@
  * verified on a physical panel before any web UI exists.
  */
 
-import type { DebugScreen } from "../config/device.js";
+import type { DeviceConfig, ScreenConfig } from "../lib/types.js";
 import { describeAction, resolveAction } from "../lib/state.js";
 import { composeTextImage, type TextLine } from "./pipeline.js";
 
@@ -17,7 +17,8 @@ const THEMES: Record<string, { background: string; foreground: string }> = {
 };
 
 export async function renderDebug(
-  screen: DebugScreen,
+  cfg: DeviceConfig,
+  screen: ScreenConfig,
   renderState: { mode?: string },
   width: number,
   height: number
@@ -29,7 +30,7 @@ export async function renderDebug(
     { text: `Screen ${screen.ordinal} · mode: ${mode}`, size: 36, bold: true },
     { text: "", size: 10 },
     ...BUTTONS.map((b) => ({
-      text: `${b}   ${describeAction(resolveAction(screen.ordinal, b))}`,
+      text: `${b}   ${describeAction(resolveAction(cfg, screen.ordinal, b))}`,
       size: 26,
     })),
   ];

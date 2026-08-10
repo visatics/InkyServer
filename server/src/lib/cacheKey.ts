@@ -3,40 +3,37 @@
  * change the rendered bytes. Byte-stable output for identical inputs is what
  * makes the client's SHA short-circuit (§7.4) work.
  *
- * The key must carry *screen identity*, not just the provider name — two
- * screens can share a provider (e.g. two slideshows over different albums) and
- * would otherwise collide and serve each other's images.
+ * Two properties are load-bearing:
+ *
+ * 1. **Screen identity.** Two screens can share a provider (e.g. two slideshows
+ *    over different albums) and would otherwise collide and serve each other's
+ *    images — the bug fixed in 3a5423d.
+ * 2. **updated_at timestamps.** These move whenever config changes (maintained
+ *    by triggers in migration 002), so an edit busts exactly the affected
+ *    renders while an untouched screen keeps a stable SHA. This replaces the
+ *    hand-maintained CONFIG_VERSION constant of Phase 0.2.
  */
 
-import { CONFIG_VERSION, DEVICE, type Screen } from "../config/device.js";
-import { sha256Hex } from "../render/pipeline.js";
-
-/**
- * PRD §4.1's `providerConfigVersion`, derived from the screen itself rather
- * than a hand-maintained constant: editing a screen's config or assets changes
- * the fingerprint and so busts the cache on its own.
- */
-function configFingerprint(screen: Screen): string {
-  return JSON.stringify({
-    ordinal: screen.ordinal,
-    config: screen.config,
-    assets: screen.provider === "slideshow" ? screen.assets : null,
-  });
-}
+import { createHash } from "node:crypto";
+import type { DeviceConfig, ScreenConfig } from "./types.js";
 
 export function cacheKeyFor(
-  screen: Screen,
+  cfg: DeviceConfig,
+  screen: ScreenConfig,
   renderState: Record<string, string | number>
 ): string {
-  return sha256Hex(
-    [
-      DEVICE.uuid,
-      DEVICE.width,
-      DEVICE.height,
-      screen.provider,
-      CONFIG_VERSION,
-      configFingerprint(screen),
-      JSON.stringify(renderState),
-    ].join("|")
-  );
+  return createHash("sha256")
+    .update(
+      [
+        cfg.publicUuid,
+        cfg.width,
+        cfg.height,
+        screen.id,
+        screen.provider,
+        cfg.updatedAt,
+        screen.updatedAt,
+        JSON.stringify(renderState),
+      ].join("|")
+    )
+    .digest("hex");
 }
