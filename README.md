@@ -113,6 +113,14 @@ Build the web app (served at `/app`; the server runs fine without it):
 cd web && npm install && npm run build
 ```
 
+For frontend work, run Vite instead — it proxies `/api` **and the device
+endpoint** through to Fastify, which Preview mode depends on:
+
+```bash
+cd server && npm run dev     # Fastify on :8080
+cd web    && npm run dev     # SPA on :5173, proxying to :8080
+```
+
 ```bash
 npm test                      # 75 tests: state engine, cache keying, JWT, API, uploads
 npm run test:protocol         # 33 end-to-end checks against the running server

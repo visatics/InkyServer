@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { config as loadEnv } from "dotenv";
 import path from "node:path";
+import { DEVICE_PATH_PATTERN } from "./src/lib/devicePath";
 
 /**
  * The Supabase URL and anon key are read from ../server/.env rather than a
@@ -21,10 +22,20 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // In dev the SPA runs on Vite; the API and the device endpoint stay on Fastify.
+    /**
+     * In dev the SPA runs on Vite and everything else stays on Fastify.
+     *
+     * The device endpoint entry is essential, not cosmetic: Preview mode is a
+     * software device calling `GET /<uuid>?state&button=X` at the site root, so
+     * without this Vite answers that request itself and 404s, and Preview is
+     * broken in dev while working in production (where Fastify serves both from
+     * one origin). It has to be a precise UUID pattern — a bare prefix would
+     * also swallow /app, /src, /assets and Vite's own /@vite endpoints.
+     */
     proxy: {
       "/api": { target: "http://localhost:8080", changeOrigin: true },
       "/placeholder.jpg": { target: "http://localhost:8080", changeOrigin: true },
+      [DEVICE_PATH_PATTERN]: { target: "http://localhost:8080", changeOrigin: true },
     },
   },
 });
