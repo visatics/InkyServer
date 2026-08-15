@@ -66,7 +66,10 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; 
 .brand { font-weight: 650; text-decoration: none; color: var(--text); }
 .page { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 .page-head { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
-.page-head > :last-child { margin-left: auto; }
+/* Push a trailing action to the right — but only when there IS one. On a
+   single-child head (Preview) :last-child is also the heading block, and the
+   auto margin would shunt the whole title to the right edge. */
+.page-head > :last-child:not(:only-child) { margin-left: auto; }
 
 .card {
   background: var(--surface); border: 1px solid var(--line);
